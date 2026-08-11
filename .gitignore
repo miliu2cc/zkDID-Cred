@@ -1,10 +1,60 @@
-# Devenv
-.devenv*
-devenv.local.nix
-devenv.local.yaml
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
 
-# direnv
-.direnv
+# Node
+node_modules/
+dist/
+.pnpm-store/
+package-lock.json
 
-# pre-commit
+# Noir
+circuits/target/
+circuits/proofs/
+circuits/*.json
+!circuits/Nargo.toml
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Tauri
+holder-app/src-tauri/target/
+*.dmg
+*.app
+*.AppImage
+*.deb
+*.exe
+*.msi
+
+# IDE
+.vscode/
+.idea/
+.zed/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+*.log
 .pre-commit-config.yaml
+
+# Devenv
+.devenv/
+.direnv/
+devenv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+# Added by cargo
+
+/target
