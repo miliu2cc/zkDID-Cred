@@ -25,6 +25,11 @@
     pnpm.enable = true;
   };
 
+  languages.solidity = {
+    enable = true;
+    foundry.enable = true;
+  };
+
   # Nix packages - Development tools and dependencies
   packages = with pkgs; [
     # === Core Development Tools ===
@@ -37,18 +42,6 @@
     cargo-watch      # Auto-rebuild on file changes
     cargo-expand     # Macro expansion debugging
     cargo-audit      # Security vulnerability scanner
-
-    # === ZK Circuits (Noir) ===
-    # Note: Noir (nargo) needs to be installed via cargo or from source
-    # We'll add it as a manual step since it's not in nixpkgs yet
-
-    # === Smart Contracts (Foundry) ===
-    # Foundry suite: forge, cast, anvil, chisel
-    # Note: Foundry needs foundryup or cargo install, adding placeholder
-    foundry
-
-    # === Blockchain Development ===
-    solc             # Solidity compiler (backup, Foundry includes it)
 
     # === Tauri Dependencies ===
     # Linux-specific dependencies for Tauri

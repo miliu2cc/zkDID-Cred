@@ -1,6 +1,16 @@
-[package]
-name = "zkDID-Cred"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = ["core"]
+resolver = "3"
 
-[dependencies]
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+ed25519-dalek = "3.0.0"
+serde_json = "1.0.150"
+serde = { version = "1.0.229", features = ["derive"]}
+base58 = "0.2.0"
+bs58 = "0.5.1"
+thiserror = "2.0.18"
