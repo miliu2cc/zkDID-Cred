@@ -11,3 +11,5 @@ serde_json.workspace = true
 serde = { workspace = true, features = ["derive"] }
 bs58.workspace = true
 thiserror.workspace = true
+rand.workspace = true
+hex.workspace = true
