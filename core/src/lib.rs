@@ -9,9 +9,12 @@
 //! - `did`: DID generation, parsing, and resolution
 //! - `error`: Error types and result aliases
 
+//! Core library for zkDID-Cred: DID generation, VC issuance, and verification.
+
 pub mod crypto;
 pub mod did;
 pub mod error;
+pub mod vc;
 
 // Re-export commonly used types
 pub use error::{CoreError, Result};
