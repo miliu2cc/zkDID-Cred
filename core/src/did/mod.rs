@@ -1,15 +1,15 @@
-//! DID (Decentralized Identifier) module
+//! DID（去中心化标识符）模块
 //!
-//! Implements the `did:key` method for Ed25519 keys.
+//! 实现基于 Ed25519 公钥的 `did:key` 方法。
 //!
-//! A `did:key` DID is derived directly from a public key:
+//! `did:key` 直接由公钥派生，无需链上注册或中心化服务：
 //! ```text
 //! did:key:z6Mk...
-//!         │└─────── base58btc(multicodec_prefix || public_key_bytes)
-//!         └──────── multibase prefix 'z' (base58btc)
+//!         │└─────── base58btc(multicodec 前缀 || 公钥字节)
+//!         └──────── multibase 前缀 'z'（表示 base58btc 编码）
 //! ```
 //!
-//! For Ed25519, the multicodec prefix is `0xed 0x01` (unsigned varint of 0xed).
+//! 对 Ed25519 而言，multicodec 前缀是 `0xed 0x01`（0xed 的无符号 varint 编码）。
 
 pub mod document;
 pub mod resolver;
@@ -22,15 +22,15 @@ use serde::{Deserialize, Serialize};
 use crate::crypto::PublicKey;
 use crate::error::{CoreError, Result};
 
-/// Multicodec prefix for Ed25519 public keys (unsigned varint of 0xed).
+/// Ed25519 公钥的 multicodec 前缀（0xed 的无符号 varint 编码）
 const ED25519_MULTICODEC_PREFIX: [u8; 2] = [0xed, 0x01];
 
-/// Multibase prefix character for base58btc encoding.
+/// base58btc 编码对应的 multibase 前缀字符
 const MULTIBASE_BASE58BTC: char = 'z';
 
-/// A Decentralized Identifier using the `did:key` method.
+/// 使用 `did:key` 方法的去中心化标识符
 ///
-/// # Example
+/// # 示例
 ///
 /// ```
 /// use core::crypto::KeyPair;
@@ -42,21 +42,21 @@ const MULTIBASE_BASE58BTC: char = 'z';
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Did {
-    /// DID method name (e.g. "key").
+    /// DID 方法名（例如 "key"）
     method: String,
-    /// Method-specific identifier (e.g. "z6Mk...").
+    /// 方法特定的标识符（例如 "z6Mk..."）
     identifier: String,
 }
 
 impl Did {
-    /// Create a `did:key` DID from an Ed25519 public key.
+    /// 由 Ed25519 公钥创建 `did:key` 类型的 DID
     pub fn from_public_key(public_key: &PublicKey) -> Self {
-        // multicodec prefix || raw public key bytes
+        // 拼接：multicodec 前缀 || 公钥原始字节
         let mut bytes = Vec::with_capacity(2 + 32);
         bytes.extend_from_slice(&ED25519_MULTICODEC_PREFIX);
         bytes.extend_from_slice(&public_key.to_bytes());
 
-        // multibase: 'z' prefix + base58btc encoding
+        // multibase 编码：'z' 前缀 + base58btc 编码
         let encoded = bs58::encode(&bytes).into_string();
         let identifier = format!("{}{}", MULTIBASE_BASE58BTC, encoded);
 
@@ -66,12 +66,13 @@ impl Did {
         }
     }
 
-    /// Parse a DID string into a `Did`.
+    /// 将 DID 字符串解析为 `Did`
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the DID is malformed or uses an unsupported method.
+    /// 当 DID 格式非法或使用了不支持的方法时返回错误
     pub fn parse(did_str: &str) -> Result<Self> {
+        // 按 ':' 拆分为最多 3 段：did、method、identifier
         let parts: Vec<&str> = did_str.splitn(3, ':').collect();
 
         if parts.len() != 3 {
@@ -81,6 +82,7 @@ impl Did {
             )));
         }
 
+        // 第一段必须是固定的 "did"
         if parts[0] != "did" {
             return Err(CoreError::InvalidDidFormat(format!(
                 "DID must start with 'did:', got '{}'",
@@ -91,6 +93,7 @@ impl Did {
         let method = parts[1].to_string();
         let identifier = parts[2].to_string();
 
+        // 当前仅支持 did:key 方法
         if method != "key" {
             return Err(CoreError::UnsupportedMethod(method));
         }
@@ -104,13 +107,13 @@ impl Did {
         Ok(Self { method, identifier })
     }
 
-    /// Extract the Ed25519 public key encoded in this `did:key`.
+    /// 从该 `did:key` 中还原出内嵌的 Ed25519 公钥
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the identifier is not a valid base58btc-encoded
-    /// Ed25519 multicodec key.
+    /// 当标识符不是合法的 base58btc 编码的 Ed25519 multicodec 公钥时返回错误
     pub fn to_public_key(&self) -> Result<PublicKey> {
+        // 第一个字符是 multibase 前缀，必须为 'z'
         let mut chars = self.identifier.chars();
         let prefix = chars
             .next()
@@ -123,11 +126,13 @@ impl Did {
             )));
         }
 
+        // 去掉前缀后进行 base58 解码
         let encoded: String = chars.collect();
         let bytes = bs58::decode(&encoded)
             .into_vec()
             .map_err(|e| CoreError::DecodingError(format!("Base58 decode failed: {}", e)))?;
 
+        // 解码结果应为 34 字节：2 字节 multicodec 前缀 + 32 字节公钥
         if bytes.len() != 34 {
             return Err(CoreError::InvalidPublicKey(format!(
                 "Expected 34 bytes (2 prefix + 32 key), got {}",
@@ -135,6 +140,7 @@ impl Did {
             )));
         }
 
+        // 校验 multicodec 前缀，确保确实是 Ed25519 公钥
         if bytes[0..2] != ED25519_MULTICODEC_PREFIX {
             return Err(CoreError::InvalidPublicKey(
                 "Not an Ed25519 multicodec key".to_string(),
@@ -144,12 +150,12 @@ impl Did {
         PublicKey::from_bytes(&bytes[2..])
     }
 
-    /// Get the DID method name.
+    /// 获取 DID 方法名
     pub fn method(&self) -> &str {
         &self.method
     }
 
-    /// Get the method-specific identifier.
+    /// 获取方法特定的标识符
     pub fn identifier(&self) -> &str {
         &self.identifier
     }
@@ -161,7 +167,7 @@ impl std::fmt::Display for Did {
     }
 }
 
-// Serialize a Did as its string form ("did:key:z...").
+// 将 Did 序列化为其字符串形式（"did:key:z..."）
 impl Serialize for Did {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -171,7 +177,7 @@ impl Serialize for Did {
     }
 }
 
-// Deserialize a Did from its string form.
+// 从字符串形式反序列化出 Did
 impl<'de> Deserialize<'de> for Did {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -187,6 +193,7 @@ mod tests {
     use super::*;
     use crate::crypto::KeyPair;
 
+    /// 测试：从公钥生成的 DID 应符合 did:key 格式
     #[test]
     fn test_did_generation() {
         let keypair = KeyPair::generate();
@@ -196,6 +203,7 @@ mod tests {
         assert!(did.to_string().starts_with("did:key:z"));
     }
 
+    /// 测试：DID 字符串解析后应与原 DID 相等
     #[test]
     fn test_did_parse() {
         let keypair = KeyPair::generate();
@@ -206,6 +214,7 @@ mod tests {
         assert_eq!(parsed, did);
     }
 
+    /// 测试：公钥 → DID → 公钥 的往返应保持一致
     #[test]
     fn test_did_roundtrip_public_key() {
         let keypair = KeyPair::generate();
@@ -215,6 +224,7 @@ mod tests {
         assert_eq!(recovered.to_bytes(), keypair.public.to_bytes());
     }
 
+    /// 测试：各种非法格式的 DID 都应解析失败
     #[test]
     fn test_parse_invalid_format() {
         assert!(Did::parse("not-a-did").is_err());
@@ -222,12 +232,14 @@ mod tests {
         assert!(Did::parse("foo:key:z123").is_err());
     }
 
+    /// 测试：不支持的 DID 方法应返回 UnsupportedMethod 错误
     #[test]
     fn test_parse_unsupported_method() {
         let result = Did::parse("did:web:example.com");
         assert!(matches!(result, Err(CoreError::UnsupportedMethod(_))));
     }
 
+    /// 测试：DID 的 JSON 序列化/反序列化往返应保持一致
     #[test]
     fn test_serde_roundtrip() {
         let keypair = KeyPair::generate();

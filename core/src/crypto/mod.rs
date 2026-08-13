@@ -1,26 +1,33 @@
+//! 密码学模块
+//!
+//! 基于 Ed25519 签名算法，提供密钥对生成、签名、验证，
+//! 以及公私钥在 Base58 / Hex / 原始字节之间的编解码能力。
+//! Ed25519 签名速度快、签名体积小（64 字节），是 DID 与 VC 的密码学基础。
+
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{CoreError, Result};
 
-/// Ed25519 key pair for signing and verification
+/// Ed25519 密钥对，包含用于验证的公钥和用于签名的私钥
 #[derive(Clone)]
 pub struct KeyPair {
-    /// Public key
+    /// 公钥
     pub public: PublicKey,
-    /// Secret key (private key)
+    /// 私钥（保密）
     pub secret: SecretKey,
 }
 
-/// Ed25519 public key
+/// Ed25519 公钥
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PublicKey(VerifyingKey);
 
-/// Ed25519 secret key (private key)
+/// Ed25519 私钥
 #[derive(Clone)]
 pub struct SecretKey(SigningKey);
 
-// Custom Serialize implementation for PublicKey
+// 为 PublicKey 自定义 Serialize：底层 VerifyingKey 未实现 serde，
+// 这里将其序列化为原始 32 字节
 impl Serialize for PublicKey {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -30,7 +37,7 @@ impl Serialize for PublicKey {
     }
 }
 
-// Custom Deserialize implementation for PublicKey
+// 为 PublicKey 自定义 Deserialize：从字节数组还原公钥
 impl<'de> Deserialize<'de> for PublicKey {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -42,9 +49,9 @@ impl<'de> Deserialize<'de> for PublicKey {
 }
 
 impl KeyPair {
-    /// Generate a new random key pair
+    /// 生成一个全新的随机密钥对
     ///
-    /// # Example
+    /// # 示例
     ///
     /// ```
     /// use core::crypto::KeyPair;
@@ -52,6 +59,7 @@ impl KeyPair {
     /// let keypair = KeyPair::generate();
     /// ```
     pub fn generate() -> Self {
+        // 用密码学安全随机数生成 32 字节私钥种子，再派生出公钥
         let signing_key = SigningKey::from_bytes(&rand::random::<[u8; 32]>());
         let verifying_key = signing_key.verifying_key();
 
@@ -61,15 +69,15 @@ impl KeyPair {
         }
     }
 
-    /// Create a key pair from raw bytes
+    /// 从原始字节还原密钥对
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `secret_bytes` - 32-byte secret key
+    /// * `secret_bytes` - 32 字节的私钥
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns error if the secret key bytes are invalid
+    /// 当私钥字节长度不正确时返回错误
     pub fn from_secret_bytes(secret_bytes: &[u8]) -> Result<Self> {
         if secret_bytes.len() != 32 {
             return Err(CoreError::InvalidSecretKey(
@@ -80,6 +88,7 @@ impl KeyPair {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(secret_bytes);
 
+        // 由私钥重新派生公钥，保证公私钥一致
         let signing_key = SigningKey::from_bytes(&bytes);
         let verifying_key = signing_key.verifying_key();
 
@@ -89,31 +98,31 @@ impl KeyPair {
         })
     }
 
-    /// Get the secret key as bytes
+    /// 获取私钥的原始字节
     pub fn secret_bytes(&self) -> [u8; 32] {
         self.secret.0.to_bytes()
     }
 
-    /// Sign a message with this key pair
+    /// 用该密钥对私钥对消息进行签名
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `message` - The message to sign
+    /// * `message` - 待签名的消息
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A 64-byte signature
+    /// 64 字节的签名
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
         let signature: Signature = self.secret.0.sign(message);
         signature.to_bytes()
     }
 
-    /// Encode the secret key as base58
+    /// 将私钥编码为 Base58 字符串（用于持久化存储）
     pub fn secret_to_base58(&self) -> String {
         bs58::encode(self.secret_bytes()).into_string()
     }
 
-    /// Create a key pair from a base58-encoded secret key
+    /// 从 Base58 编码的私钥字符串还原密钥对
     pub fn from_base58_secret(encoded: &str) -> Result<Self> {
         let bytes = bs58::decode(encoded)
             .into_vec()
@@ -124,15 +133,15 @@ impl KeyPair {
 }
 
 impl PublicKey {
-    /// Create a public key from raw bytes
+    /// 从原始字节创建公钥
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `bytes` - 32-byte public key
+    /// * `bytes` - 32 字节的公钥
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns error if the public key bytes are invalid
+    /// 当公钥字节非法时返回错误
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != 32 {
             return Err(CoreError::InvalidPublicKey(
@@ -149,17 +158,17 @@ impl PublicKey {
         Ok(Self(verifying_key))
     }
 
-    /// Get the public key as bytes
+    /// 获取公钥的原始字节
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()
     }
 
-    /// Encode the public key as base58
+    /// 将公钥编码为 Base58 字符串
     pub fn to_base58(&self) -> String {
         bs58::encode(self.to_bytes()).into_string()
     }
 
-    /// Create a public key from a base58-encoded string
+    /// 从 Base58 编码字符串创建公钥
     pub fn from_base58(encoded: &str) -> Result<Self> {
         let bytes = bs58::decode(encoded)
             .into_vec()
@@ -168,12 +177,12 @@ impl PublicKey {
         Self::from_bytes(&bytes)
     }
 
-    /// Encode the public key as hexadecimal
+    /// 将公钥编码为十六进制字符串
     pub fn to_hex(&self) -> String {
         hex::encode(self.to_bytes())
     }
 
-    /// Create a public key from a hexadecimal string
+    /// 从十六进制字符串创建公钥
     pub fn from_hex(hex_str: &str) -> Result<Self> {
         let bytes = hex::decode(hex_str)
             .map_err(|e| CoreError::DecodingError(format!("Hex decode failed: {}", e)))?;
@@ -181,16 +190,16 @@ impl PublicKey {
         Self::from_bytes(&bytes)
     }
 
-    /// Verify a signature on a message
+    /// 验证消息上的签名
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `message` - The message that was signed
-    /// * `signature` - The 64-byte signature to verify
+    /// * `message` - 被签名的原始消息
+    /// * `signature` - 待验证的 64 字节签名
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// `Ok(())` if the signature is valid, error otherwise
+    /// 签名有效返回 `Ok(())`，否则返回错误
     pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<()> {
         if signature.len() != 64 {
             return Err(CoreError::SignatureVerificationFailed);
@@ -205,13 +214,13 @@ impl PublicKey {
 }
 
 impl SecretKey {
-    /// Get the secret key as bytes
+    /// 获取私钥的原始字节
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()
     }
 }
 
-// Implement Debug for SecretKey without exposing the key material
+// 为 SecretKey 自定义 Debug，避免在日志或调试输出中泄露私钥内容
 impl std::fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "SecretKey([REDACTED])")
@@ -237,14 +246,14 @@ mod tests {
         let signature = keypair.sign(message);
         assert_eq!(signature.len(), 64);
 
-        // Verification should succeed
+        // 正确的消息和签名应验证成功
         assert!(keypair.public.verify(message, &signature).is_ok());
 
-        // Verification with wrong message should fail
+        // 消息被篡改时验证应失败
         let wrong_message = b"Wrong message";
         assert!(keypair.public.verify(wrong_message, &signature).is_err());
 
-        // Verification with wrong signature should fail
+        // 签名错误时验证应失败
         let wrong_signature = [0u8; 64];
         assert!(keypair.public.verify(message, &wrong_signature).is_err());
     }
@@ -254,7 +263,7 @@ mod tests {
         let keypair = KeyPair::generate();
         let secret_bytes = keypair.secret_bytes();
 
-        // Reconstruct from bytes
+        // 从字节还原密钥对
         let restored_keypair = KeyPair::from_secret_bytes(&secret_bytes).unwrap();
 
         assert_eq!(
@@ -268,12 +277,12 @@ mod tests {
     fn test_base58_encoding() {
         let keypair = KeyPair::generate();
 
-        // Test public key
+        // 测试公钥编解码往返
         let public_base58 = keypair.public.to_base58();
         let restored_public = PublicKey::from_base58(&public_base58).unwrap();
         assert_eq!(keypair.public.to_bytes(), restored_public.to_bytes());
 
-        // Test secret key
+        // 测试私钥编解码往返
         let secret_base58 = keypair.secret_to_base58();
         let restored_keypair = KeyPair::from_base58_secret(&secret_base58).unwrap();
         assert_eq!(
@@ -294,11 +303,11 @@ mod tests {
 
     #[test]
     fn test_invalid_key_lengths() {
-        // Test invalid public key length
+        // 公钥长度非法应报错
         let invalid_public = PublicKey::from_bytes(&[0u8; 16]);
         assert!(invalid_public.is_err());
 
-        // Test invalid secret key length
+        // 私钥长度非法应报错
         let invalid_secret = KeyPair::from_secret_bytes(&[0u8; 16]);
         assert!(invalid_secret.is_err());
     }
@@ -311,10 +320,10 @@ mod tests {
 
         let signature = keypair1.sign(message);
 
-        // Verify with correct public key
+        // 用正确的公钥验证应成功
         assert!(keypair1.public.verify(message, &signature).is_ok());
 
-        // Verify with different public key should fail
+        // 用另一个密钥对的公钥验证应失败
         assert!(keypair2.public.verify(message, &signature).is_err());
     }
 }

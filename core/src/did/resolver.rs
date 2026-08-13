@@ -1,24 +1,23 @@
-//! DID resolution.
+//! DID 解析（Resolution）
 //!
-//! For `did:key`, resolution is purely local: the DID Document is
-//! reconstructed from the public key encoded in the DID itself, with no
-//! network or ledger lookup required.
+//! 对 `did:key` 而言，解析完全在本地完成：DID Document 直接
+//! 由 DID 中内嵌的公钥重建，无需任何网络或链上查询。
 
 use super::{Did, DidDocument};
 use crate::error::Result;
 
-/// A resolver turns a DID string into a DID Document.
+/// 解析器：将 DID 字符串转换为 DID Document
 pub trait DidResolver {
-    /// Resolve a DID string into its DID Document.
+    /// 将 DID 字符串解析为对应的 DID Document
     fn resolve(&self, did_str: &str) -> Result<DidDocument>;
 }
 
-/// Resolver for the `did:key` method.
+/// `did:key` 方法的解析器
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeyMethodResolver;
 
 impl KeyMethodResolver {
-    /// Create a new `did:key` resolver.
+    /// 创建一个新的 `did:key` 解析器
     pub fn new() -> Self {
         Self
     }
@@ -26,8 +25,7 @@ impl KeyMethodResolver {
 
 impl DidResolver for KeyMethodResolver {
     fn resolve(&self, did_str: &str) -> Result<DidDocument> {
-        // Parsing validates the method and that the identifier decodes to a
-        // valid Ed25519 key.
+        // 解析过程会校验方法名，并确认标识符能解码出合法的 Ed25519 公钥
         let did = Did::parse(did_str)?;
         did.to_public_key()?;
         Ok(DidDocument::from_did(&did))
@@ -39,6 +37,7 @@ mod tests {
     use super::*;
     use crate::crypto::KeyPair;
 
+    /// 测试：解析合法 DID，文档 id 应与输入一致
     #[test]
     fn test_resolve_valid_did() {
         let keypair = KeyPair::generate();
@@ -51,6 +50,7 @@ mod tests {
         assert_eq!(doc.id, did_str);
     }
 
+    /// 测试：解析非法或不支持的 DID 应失败
     #[test]
     fn test_resolve_invalid_did() {
         let resolver = KeyMethodResolver::new();
@@ -58,6 +58,7 @@ mod tests {
         assert!(resolver.resolve("not-a-did").is_err());
     }
 
+    /// 测试：解析出的文档中公钥应与 DID 标识符一致
     #[test]
     fn test_resolve_matches_public_key() {
         let keypair = KeyPair::generate();
@@ -66,7 +67,7 @@ mod tests {
         let resolver = KeyMethodResolver::new();
         let doc = resolver.resolve(&did.to_string()).unwrap();
 
-        // The verification method's multibase key should match the DID identifier.
+        // 验证方法中的 multibase 公钥应与 DID 标识符一致
         assert_eq!(
             doc.verification_method[0].public_key_multibase,
             did.identifier()

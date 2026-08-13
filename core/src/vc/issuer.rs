@@ -1,4 +1,4 @@
-//! Credential issuance: signing a credential with the issuer's DID key.
+//! 凭证签发：用签发方的 DID 私钥对凭证进行签名
 
 use chrono::Utc;
 
@@ -7,31 +7,27 @@ use crate::crypto::KeyPair;
 use crate::did::Did;
 use crate::error::{CoreError, Result};
 
-/// Produce the canonical bytes of a credential that the signature covers.
+/// 生成签名所覆盖的凭证规范字节
 ///
-/// The proof field is excluded; every other field is serialized to JSON. Rust
-/// struct fields serialize in declaration order and `serde_json` maps have
-/// sorted keys by default, so this is deterministic for the same input.
+/// proof 字段被排除，其余字段序列化为 JSON。Rust 结构体字段按声明顺序序列化，
+/// 且 `serde_json` 的 map 默认按键排序，因此对相同输入结果是确定性的。
 pub(crate) fn canonicalize(credential: &VerifiableCredential) -> Result<Vec<u8>> {
     let unsigned = credential.without_proof();
     serde_json::to_vec(&unsigned).map_err(|e| CoreError::SerializationError(e.to_string()))
 }
 
-/// Sign a credential with the issuer's key pair, returning a credential with an
-/// attached [`Proof`].
+/// 用签发方密钥对凭证签名，返回附带 [`Proof`] 的凭证
 ///
-/// The issuer key pair must correspond to the `issuer` DID recorded in the
-/// credential; otherwise verification will later fail.
+/// 签发方密钥对必须与凭证中记录的 `issuer` DID 对应，否则后续验证会失败。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the `issuer` field is not a valid DID or if the key pair
-/// does not match the issuer DID.
+/// 当 `issuer` 字段不是合法 DID，或密钥对与签发方 DID 不匹配时返回错误。
 pub fn issue_credential(
     mut credential: VerifiableCredential,
     issuer_keypair: &KeyPair,
 ) -> Result<VerifiableCredential> {
-    // The signing key must match the issuer DID.
+    // 签名所用私钥必须与签发方 DID 对应
     let issuer_did = Did::parse(&credential.issuer)?;
     let issuer_public = issuer_did.to_public_key()?;
     if issuer_public.to_bytes() != issuer_keypair.public.to_bytes() {
@@ -40,12 +36,12 @@ pub fn issue_credential(
         ));
     }
 
-    // Sign the canonical (proof-less) bytes.
+    // 对规范化（去除 proof）后的字节进行签名
     let message = canonicalize(&credential)?;
     let signature = issuer_keypair.sign(&message);
     let proof_value = bs58::encode(signature).into_string();
 
-    // The verification method is the issuer DID's assertion key fragment.
+    // 验证方法指向签发方 DID 的断言密钥片段
     let verification_method = format!("{}#{}", issuer_did, issuer_did.identifier());
 
     credential.proof = Some(Proof {
@@ -85,6 +81,7 @@ mod tests {
         }
     }
 
+    /// 测试：签发后凭证应附带正确的 proof
     #[test]
     fn test_issue_attaches_proof() {
         let issuer_kp = KeyPair::generate();
@@ -102,6 +99,7 @@ mod tests {
         assert!(!proof.proof_value.is_empty());
     }
 
+    /// 测试：用与签发方 DID 不匹配的密钥签发应失败
     #[test]
     fn test_issue_rejects_mismatched_key() {
         let issuer_kp = KeyPair::generate();
@@ -111,7 +109,7 @@ mod tests {
         let holder_did = Did::from_public_key(&holder_kp.public).to_string();
 
         let vc = sample_credential(&issuer_did, &holder_did);
-        // Signing with a key that doesn't match the issuer DID must fail.
+        // 用与签发方 DID 不匹配的密钥签名，必须失败
         assert!(issue_credential(vc, &wrong_kp).is_err());
     }
 }

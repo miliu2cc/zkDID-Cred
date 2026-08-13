@@ -1,42 +1,48 @@
-//! Complete flow: generate DIDs, issue a credential, verify it.
+//! 完整流程演示：生成 DID、签发凭证、验证凭证
 
-use crate::std::error::{CoreError, Result};
 use chrono::Utc;
 use core::crypto::KeyPair;
-use core::did::{Did, DidDocument, DidResolver, KeyMethodResolver};
+use core::did::{Did, DidResolver, KeyMethodResolver};
 use core::vc::{CredentialSubject, VerifiableCredential, issue_credential, verify_credential};
 use serde_json::json;
 
-fn main() -> core::Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> core::Result<()> {
     println!("=== zkDID-Cred: Complete VC Flow ===\n");
 
-    // Step 1: Generate key pairs for issuer (university) and holder (student).
-    println!("1. Generating key pairs...");
+    // 步骤 1：为签发方（大学）和持有方（学生）生成密钥对
+    println!("1. 生成密钥对...");
     let issuer_keypair = KeyPair::generate();
     let holder_keypair = KeyPair::generate();
-    println!("   ✓ Issuer and holder key pairs generated\n");
+    println!("   ✓ 签发方和持有方的密钥对已生成\n");
 
-    // Step 2: Derive DIDs from public keys.
-    println!("2. Creating DIDs...");
+    // 步骤 2：从公钥派生 DID
+    println!("2. 创建 DID...");
     let issuer_did = Did::from_public_key(&issuer_keypair.public);
     let holder_did = Did::from_public_key(&holder_keypair.public);
-    println!("   Issuer DID:  {}", issuer_did);
-    println!("   Holder DID:  {}\n", holder_did);
+    println!("   签发方 DID:  {}", issuer_did);
+    println!("   持有方 DID:  {}\n", holder_did);
 
-    // Step 3: Resolve DIDs to DID Documents.
-    println!("3. Resolving DID Documents...");
+    // 步骤 3：解析 DID 为 DID Document
+    println!("3. 解析 DID Document...");
     let resolver = KeyMethodResolver::new();
     let issuer_doc = resolver.resolve(&issuer_did.to_string())?;
-    let holder_doc = resolver.resolve(&holder_did.to_string())?;
-    println!("   ✓ Issuer document resolved");
-    println!("   ✓ Holder document resolved\n");
+    let _holder_doc = resolver.resolve(&holder_did.to_string())?;
+    println!("   ✓ 签发方文档已解析");
+    println!("   ✓ 持有方文档已解析\n");
 
-    // Optional: print issuer's DID Document
-    println!("   Issuer DID Document:");
+    // 可选：打印签发方的 DID Document
+    println!("   签发方 DID Document:");
     println!("{}\n", issuer_doc.to_json()?);
 
-    // Step 4: Create an unsigned credential.
-    println!("4. Creating credential...");
+    // 步骤 4：创建未签名的凭证
+    println!("4. 创建凭证...");
     let credential = VerifiableCredential {
         context: vec![
             "https://www.w3.org/2018/credentials/v1".to_string(),
@@ -62,37 +68,39 @@ fn main() -> core::Result<()> {
         credential_status: None,
         proof: None,
     };
-    println!("   ✓ Credential created (unsigned)\n");
+    println!("   ✓ 凭证已创建（未签名）\n");
 
-    // Step 5: Issue the credential (sign it with issuer's key).
-    println!("5. Issuing credential (signing)...");
+    // 步骤 5：签发凭证（用签发方的密钥签名）
+    println!("5. 签发凭证（签名中）...");
     let signed_credential = issue_credential(credential, &issuer_keypair)?;
-    println!("   ✓ Credential signed by issuer\n");
+    println!("   ✓ 凭证已由签发方签名\n");
 
-    println!("   Signed Credential:");
-    println!("{}\n", serde_json::to_string_pretty(&signed_credential)?);
+    println!("   已签名的凭证:");
+    let json_str = serde_json::to_string_pretty(&signed_credential)
+        .map_err(|e| core::CoreError::SerializationError(e.to_string()))?;
+    println!("{}\n", json_str);
 
-    // Step 6: Verify the credential.
-    println!("6. Verifying credential...");
+    // 步骤 6：验证凭证
+    println!("6. 验证凭证...");
     verify_credential(&signed_credential)?;
-    println!("   ✓ Credential signature is valid");
-    println!("   ✓ Credential has not expired");
-    println!("   ✓ Verification successful!\n");
+    println!("   ✓ 凭证签名有效");
+    println!("   ✓ 凭证未过期");
+    println!("   ✓ 验证成功！\n");
 
-    // Step 7: Demonstrate tampering detection.
-    println!("7. Testing tampering detection...");
+    // 步骤 7：演示篡改检测
+    println!("7. 测试篡改检测...");
     let mut tampered = signed_credential.clone();
     tampered.credential_subject.claims = json!({
         "name": "Alice Smith",
         "degree": "Bachelor of Computer Science",
-        "gpa": 4.0,  // Tampered: changed from 3.85 to 4.0
+        "gpa": 4.0,  // 篡改：从 3.85 改为 4.0
         "graduationYear": 2024,
     });
     match verify_credential(&tampered) {
-        Ok(_) => println!("   ✗ Tampering not detected (should not happen!)"),
-        Err(e) => println!("   ✓ Tampering detected: {}\n", e),
+        Ok(_) => println!("   ✗ 未检测到篡改（不应发生！）"),
+        Err(e) => println!("   ✓ 检测到篡改: {}\n", e),
     }
 
-    println!("=== Flow Complete ===");
+    println!("=== 流程完成 ===");
     Ok(())
 }

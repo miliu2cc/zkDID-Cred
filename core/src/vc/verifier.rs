@@ -1,4 +1,4 @@
-//! Credential verification: checking a credential's proof against the issuer DID.
+//! 凭证验证：对照签发方 DID 校验凭证的 proof
 
 use chrono::{DateTime, Utc};
 
@@ -6,47 +6,46 @@ use super::{VerifiableCredential, issuer::canonicalize};
 use crate::did::Did;
 use crate::error::{CoreError, Result};
 
-/// Verify a credential's proof.
+/// 验证凭证的 proof
 ///
-/// This checks that:
-/// 1. The credential carries a proof.
-/// 2. The signature is valid for the public key derived from the `issuer` DID.
-/// 3. The credential has not expired (if `expirationDate` is set).
+/// 该函数会检查：
+/// 1. 凭证是否携带 proof；
+/// 2. 签名对由 `issuer` DID 派生出的公钥是否有效；
+/// 3. 凭证是否已过期（若设置了 `expirationDate`）。
 ///
-/// It does NOT check revocation status — that requires an external revocation
-/// list / on-chain lookup and is handled by the blockchain layer.
+/// 该函数【不】检查撤销状态——撤销需要外部撤销列表 / 链上查询，
+/// 由区块链层负责处理。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the proof is missing, malformed, expired, or if the
-/// signature does not verify.
+/// 当 proof 缺失、格式非法、已过期，或签名验证失败时返回错误。
 pub fn verify_credential(credential: &VerifiableCredential) -> Result<()> {
     let proof = credential
         .proof
         .as_ref()
         .ok_or_else(|| CoreError::SignatureVerificationFailed)?;
 
-    // Recover the issuer's public key from the issuer DID.
+    // 从签发方 DID 还原其公钥
     let issuer_did = Did::parse(&credential.issuer)?;
     let issuer_public = issuer_did.to_public_key()?;
 
-    // The proof's verification method must belong to the issuer DID.
+    // proof 的验证方法必须属于签发方 DID
     if !proof.verification_method.starts_with(&credential.issuer) {
         return Err(CoreError::CryptoError(
             "Proof verification method does not belong to the issuer DID".to_string(),
         ));
     }
 
-    // Decode the signature.
+    // 解码签名
     let signature = bs58::decode(&proof.proof_value)
         .into_vec()
         .map_err(|e| CoreError::DecodingError(format!("Signature decode failed: {}", e)))?;
 
-    // Reconstruct the signed bytes and verify.
+    // 重建被签名的字节并验证签名
     let message = canonicalize(credential)?;
     issuer_public.verify(&message, &signature)?;
 
-    // Check expiration if present.
+    // 若设置了过期时间则进行检查
     if let Some(exp) = &credential.expiration_date {
         let exp_time = DateTime::parse_from_rfc3339(exp)
             .map_err(|e| CoreError::DeserializationError(format!("Invalid expirationDate: {}", e)))?
@@ -91,20 +90,23 @@ mod tests {
         (signed, issuer_kp)
     }
 
+    /// 测试：合法凭证应验证通过
     #[test]
     fn test_verify_valid_credential() {
         let (vc, _) = signed_credential();
         assert!(verify_credential(&vc).is_ok());
     }
 
+    /// 测试：签名后篡改声明内容应导致验证失败
     #[test]
     fn test_verify_rejects_tampered_claims() {
         let (mut vc, _) = signed_credential();
-        // Tamper with a claim after signing.
+        // 签名后篡改某个声明
         vc.credential_subject.claims = json!({ "gpa": 4.0 });
         assert!(verify_credential(&vc).is_err());
     }
 
+    /// 测试：缺少 proof 的凭证应验证失败
     #[test]
     fn test_verify_rejects_missing_proof() {
         let (mut vc, _) = signed_credential();
@@ -112,6 +114,7 @@ mod tests {
         assert!(verify_credential(&vc).is_err());
     }
 
+    /// 测试：签名有效但已过期的凭证应验证失败
     #[test]
     fn test_verify_rejects_expired_credential() {
         let issuer_kp = KeyPair::generate();
@@ -134,7 +137,7 @@ mod tests {
             proof: None,
         };
         let signed = issue_credential(vc, &issuer_kp).unwrap();
-        // Signature is valid but the credential is expired.
+        // 签名有效但凭证已过期
         assert!(verify_credential(&signed).is_err());
     }
 }

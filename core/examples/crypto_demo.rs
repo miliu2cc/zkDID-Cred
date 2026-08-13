@@ -1,6 +1,6 @@
-//! Cryptographic operations demonstration
+//! 密码学操作演示
 //!
-//! Run with: cargo run --example crypto_demo
+//! 运行方式：cargo run --example crypto_demo
 
 use core::crypto::KeyPair;
 
