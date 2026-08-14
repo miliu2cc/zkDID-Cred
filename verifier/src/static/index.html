@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zkDID-Cred · 验证方（Verifier）</title>
+<style>
+:root { --primary: #0891b2; --bg: #f1f5f9; --card: #ffffff; --border: #e2e8f0; --text: #0f172a; --muted: #64748b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+header { background: linear-gradient(135deg, #0891b2, #0e7490); color: #fff; padding: 26px 32px; }
+header h1 { font-size: 22px; font-weight: 700; }
+header p { opacity: .85; margin-top: 4px; font-size: 14px; }
+main { max-width: 780px; margin: 24px auto; padding: 0 20px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+.card h2 { font-size: 16px; margin-bottom: 12px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; font-weight: 500; }
+textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+button { background: var(--primary); color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; margin-top: 12px; }
+button:hover { filter: brightness(1.08); }
+pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow: auto; font-size: 12px; margin-top: 12px; white-space: pre-wrap; word-break: break-all; }
+.badge { display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: 14px; font-weight: 700; margin-top: 14px; }
+.badge.ok { background: #dcfce7; color: #166534; }
+.badge.err { background: #fee2e2; color: #991b1b; }
+.kv { margin-top: 10px; }
+.kv div { font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.kv b { color: var(--muted); font-weight: 500; margin-right: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>zkDID-Cred · 验证方（Verifier）</h1>
+  <p>验证凭证的 Ed25519 签名与有效期</p>
+</header>
+<main>
+  <section class="card">
+    <h2>验证凭证</h2>
+    <label>粘贴凭证 JSON</label>
+    <textarea id="credential" rows="14" placeholder='粘贴学校签发的凭证 JSON 到此处'></textarea>
+    <div><button onclick="verify()">验证凭证</button></div>
+    <div id="result"></div>
+  </section>
+</main>
+<script>
+function esc(s) { return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+async function verify() {
+  const raw = document.getElementById('credential').value.trim();
+  if (!raw) { alert('请先粘贴凭证 JSON'); return; }
+  let credential;
+  try { credential = JSON.parse(raw); }
+  catch (e) { alert('不是合法的 JSON'); return; }
+  const r = await fetch('/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: credential }) });
+  const d = await r.json();
+  const el = document.getElementById('result');
+  if (d.valid) {
+    el.innerHTML = '<span class="badge ok">✓ 验证通过</span>' +
+      '<div class="kv">' +
+      '<div><b>凭证 ID</b>' + esc(d.credential_id) + '</div>' +
+      '<div><b>签发方</b>' + esc(d.issuer) + '</div>' +
+      '<div><b>主体</b>' + esc(d.subject) + '</div>' +
+      '<div><b>类型</b>' + esc(d.types.join(', ')) + '</div>' +
+      '<div><b>消息</b>' + esc(d.message) + '</div>' +
+      '</div>';
+  } else {
+    el.innerHTML = '<span class="badge err">✗ 验证失败</span>' +
+      '<div class="kv"><div><b>原因</b>' + esc(d.message) + '</div></div>';
+  }
+}
+</script>
+</body>
+</html>

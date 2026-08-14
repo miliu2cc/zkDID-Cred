@@ -1,7 +1,7 @@
 //! 学校端 REST API（axum）
 
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -31,10 +31,15 @@ pub struct IssueRequest {
 /// 构建路由器
 pub fn router() -> Router {
     Router::new()
+        .route("/", get(index))
         .route("/health", get(health))
         .route("/init", post(init))
         .route("/did", get(did))
         .route("/issue", post(issue))
+}
+
+async fn index() -> Html<&'static str> {
+    Html(include_str!("../static/index.html"))
 }
 
 async fn health() -> Json<serde_json::Value> {

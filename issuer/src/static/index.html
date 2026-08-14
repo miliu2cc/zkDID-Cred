@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zkDID-Cred · 学校端（Issuer）</title>
+<style>
+:root { --primary: #4f46e5; --bg: #f1f5f9; --card: #ffffff; --border: #e2e8f0; --text: #0f172a; --muted: #64748b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+header { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; padding: 26px 32px; }
+header h1 { font-size: 22px; font-weight: 700; }
+header p { opacity: .85; margin-top: 4px; font-size: 14px; }
+main { max-width: 780px; margin: 24px auto; padding: 0 20px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+.card h2 { font-size: 16px; margin-bottom: 12px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; font-weight: 500; }
+input, textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; }
+input:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+textarea { resize: vertical; }
+button { background: var(--primary); color: #fff; border: 0; padding: 9px 18px; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; }
+button:hover { filter: brightness(1.08); }
+code { display: inline-block; background: #f1f5f9; padding: 3px 8px; border-radius: 6px; font-size: 13px; word-break: break-all; margin-top: 4px; }
+pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow: auto; font-size: 12px; margin-top: 12px; white-space: pre-wrap; word-break: break-all; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>zkDID-Cred · 学校端（Issuer）</h1>
+  <p>生成签发方 DID，签发绑定 Poseidon2 承诺的可信凭证</p>
+</header>
+<main>
+  <section class="card">
+    <h2>签发方身份</h2>
+    <div class="row">
+      <input id="nameInput" placeholder="机构名称，如 Beijing University" style="flex:1">
+      <button onclick="initIdentity()">初始化身份</button>
+    </div>
+    <label>当前 DID</label>
+    <code id="issuerDid">未初始化（点击「初始化身份」生成）</code>
+  </section>
+
+  <section class="card">
+    <h2>签发凭证</h2>
+    <label>学生 DID</label>
+    <input id="holder" placeholder="did:key:z6Mk...">
+    <label>凭证类型</label>
+    <input id="credentialType" value="UniversityDegreeCredential">
+    <label>声明（JSON，ZK 兼容 schema）</label>
+    <textarea id="claims" rows="4">{"gpa":3.85,"degree":"bachelor","courses":[101,205]}</textarea>
+    <div class="hint">gpa 为浮点；degree 取 bachelor/master/doctor/none；courses 为课程编号数组（最多 8 个）</div>
+    <label>过期时间（可选，RFC3339）</label>
+    <input id="expiration" placeholder="2026-12-31T00:00:00Z">
+    <div style="margin-top:14px"><button onclick="issue()">签发凭证</button></div>
+    <pre id="result" style="display:none"></pre>
+  </section>
+</main>
+<script>
+function showResult(el, text, ok) {
+  el.style.display = 'block';
+  el.textContent = text;
+  el.style.background = ok ? '#052e16' : '#450a0a';
+}
+async function loadDid() {
+  try {
+    const r = await fetch('/did');
+    const d = await r.json();
+    document.getElementById('issuerDid').textContent = d.did || '未初始化';
+  } catch (e) { /* 服务未初始化或未启动 */ }
+}
+async function initIdentity() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { alert('请输入机构名称'); return; }
+  const r = await fetch('/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+  const d = await r.json();
+  if (r.ok) { document.getElementById('issuerDid').textContent = d.did; }
+  showResult(document.getElementById('result'), JSON.stringify(d, null, 2), r.ok);
+}
+async function issue() {
+  const holder = document.getElementById('holder').value.trim();
+  const credentialType = document.getElementById('credentialType').value.trim();
+  const expiration = document.getElementById('expiration').value.trim();
+  if (!holder) { alert('请输入学生 DID'); return; }
+  let claims;
+  try { claims = JSON.parse(document.getElementById('claims').value.trim()); }
+  catch (e) { alert('声明不是合法 JSON'); return; }
+  const body = { holder: holder, credentialType: credentialType, claims: claims, expiration: expiration || null };
+  const r = await fetch('/issue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  const el = document.getElementById('result');
+  showResult(el, JSON.stringify(d, null, 2), r.ok);
+}
+loadDid();
+</script>
+</body>
+</html>
