@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "holder", "issuer", "verifier"]
+members = ["core", "holder", "issuer", "verifier", "blockchain"]
 resolver = "3"
 
 [workspace.package]

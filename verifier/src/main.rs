@@ -1,13 +1,15 @@
+mod api;
+mod service;
+
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
-use core::vc::VerifiableCredential;
 use std::fs;
 use std::path::PathBuf;
+use zkdid_core::vc::VerifiableCredential;
 
 #[derive(Parser)]
 #[command(name = "verifier-cli")]
-#[command(about = "Verifier CLI for validating Verifiable Credentials", long_about = None)]
+#[command(about = "验证方：验证凭证（CLI + HTTP 服务）", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -15,91 +17,66 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Verify a credential's signature and validity
+    /// 验证一张凭证（CLI）
     Verify {
-        /// Path to the credential JSON file
         #[arg(short, long)]
         credential: PathBuf,
-        /// Show detailed credential information
         #[arg(short, long)]
         verbose: bool,
+    },
+    /// 启动 HTTP 服务
+    Serve {
+        #[arg(long, default_value_t = 8081)]
+        port: u16,
     },
 }
 
 fn cmd_verify(credential_path: PathBuf, verbose: bool) -> Result<()> {
-    println!("🔍 Loading credential from: {}", credential_path.display());
-
-    // Read credential file
     let content = fs::read_to_string(&credential_path)?;
     let credential: VerifiableCredential = serde_json::from_str(&content)?;
 
-    println!("📋 Credential ID: {}", credential.id);
-    println!("📄 Type: {:?}", credential.types);
-    println!("🏛️  Issuer: {}", credential.issuer);
-    println!("📅 Issued: {}", credential.issuance_date);
+    let report = service::verify(&credential);
 
-    // Check expiration
-    if let Some(exp) = &credential.expiration_date {
-        println!("⏰ Expires: {}", exp);
-        let expiration: DateTime<Utc> = exp.parse()?;
-        if expiration < Utc::now() {
-            println!("\n❌ EXPIRED: This credential has expired!");
-            anyhow::bail!("Credential expired on {}", exp);
+    println!("📋 Credential ID: {}", report.credential_id);
+    println!("🏛️  Issuer: {}", report.issuer);
+    println!("👤 Subject: {}", report.subject);
+
+    if report.valid {
+        println!("✅ {}", report.message);
+        println!("✅ VERIFICATION SUCCESSFUL");
+        if verbose {
+            println!(
+                "
+📊 Details:"
+            );
+            println!("{}", serde_json::to_string_pretty(&credential)?);
         }
+        Ok(())
     } else {
-        println!("⏰ Expires: Never");
-    }
-
-    // Verify signature
-    println!("\n🔐 Verifying signature...");
-    match core::vc::verify_credential(&credential) {
-        Ok(_) => {
-            println!("✅ Signature valid!");
-            println!("✅ Credential is authentic and has not been tampered with.");
-
-            if verbose {
-                println!("\n📊 Credential Details:");
-                println!("👤 Subject ID: {}", credential.credential_subject.id);
-                println!("📝 Claims:");
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&credential.credential_subject.claims)?
-                );
-
-                if let Some(proof) = &credential.proof {
-                    println!("\n🔏 Proof Details:");
-                    println!("  Type: {}", proof.type_);
-                    println!("  Created: {}", proof.created);
-                    println!("  Verification Method: {}", proof.verification_method);
-                    println!("  Purpose: {}", proof.proof_purpose);
-                }
-            }
-
-            println!("\n✅ VERIFICATION SUCCESSFUL");
-            Ok(())
-        }
-        Err(e) => {
-            println!("❌ Signature verification failed!");
-            println!("❌ Error: {}", e);
-            println!("\n⚠️  This credential may have been tampered with or is invalid.");
-            Err(e.into())
-        }
+        println!("❌ {}", report.message);
+        println!("❌ VERIFICATION FAILED");
+        std::process::exit(1);
     }
 }
 
-fn main() {
+async fn serve(port: u16) -> Result<()> {
+    let addr = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("🚀 Verifier 服务已启动: http://{addr}");
+    println!("   端点: POST /verify, GET /health");
+    axum::serve(listener, api::router()).await?;
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let result = match cli.command {
+    match cli.command {
         Commands::Verify {
             credential,
             verbose,
         } => cmd_verify(credential, verbose),
-    };
-
-    // Verification failure is an expected business outcome, not a crash.
-    // Exit with a non-zero code but without printing a Rust backtrace.
-    if result.is_err() {
-        std::process::exit(1);
+        Commands::Serve { port } => serve(port).await,
     }
 }

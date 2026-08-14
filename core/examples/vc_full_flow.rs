@@ -1,10 +1,12 @@
 //! 完整流程演示：生成 DID、签发凭证、验证凭证
 
 use chrono::Utc;
-use core::crypto::KeyPair;
-use core::did::{Did, DidResolver, KeyMethodResolver};
-use core::vc::{CredentialSubject, VerifiableCredential, issue_credential, verify_credential};
 use serde_json::json;
+use zkdid_core::crypto::KeyPair;
+use zkdid_core::did::{Did, DidResolver, KeyMethodResolver};
+use zkdid_core::vc::{
+    CredentialSubject, VerifiableCredential, issue_credential, verify_credential,
+};
 
 fn main() {
     if let Err(e) = run() {
@@ -13,7 +15,7 @@ fn main() {
     }
 }
 
-fn run() -> core::Result<()> {
+fn run() -> zkdid_core::Result<()> {
     println!("=== zkDID-Cred: Complete VC Flow ===\n");
 
     // 步骤 1：为签发方（大学）和持有方（学生）生成密钥对
@@ -78,7 +80,7 @@ fn run() -> core::Result<()> {
 
     println!("   已签名的凭证:");
     let json_str = serde_json::to_string_pretty(&signed_credential)
-        .map_err(|e| core::CoreError::SerializationError(e.to_string()))?;
+        .map_err(|e| zkdid_core::CoreError::SerializationError(e.to_string()))?;
     println!("{}\n", json_str);
 
     // 步骤 6：验证凭证

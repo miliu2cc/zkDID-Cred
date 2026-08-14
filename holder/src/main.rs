@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use core::crypto::KeyPair;
-use core::did::Did;
-use core::vc::VerifiableCredential;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use zkdid_core::crypto::KeyPair;
+use zkdid_core::did::Did;
+use zkdid_core::vc::VerifiableCredential;
 
 #[derive(Parser)]
 #[command(name = "holder-cli")]
@@ -97,7 +97,7 @@ fn cmd_receive(credential_path: PathBuf) -> Result<()> {
 
     // Verify credential first
     println!("🔍 Verifying credential...");
-    core::vc::verify_credential(&credential)?;
+    zkdid_core::vc::verify_credential(&credential)?;
     println!("✅ Credential verified!");
 
     // Save to credentials directory

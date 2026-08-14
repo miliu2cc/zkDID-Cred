@@ -54,7 +54,7 @@ impl KeyPair {
     /// # 示例
     ///
     /// ```
-    /// use core::crypto::KeyPair;
+    /// use zkdid_core::crypto::KeyPair;
     ///
     /// let keypair = KeyPair::generate();
     /// ```

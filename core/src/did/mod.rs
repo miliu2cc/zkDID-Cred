@@ -33,8 +33,8 @@ const MULTIBASE_BASE58BTC: char = 'z';
 /// # 示例
 ///
 /// ```
-/// use core::crypto::KeyPair;
-/// use core::did::Did;
+/// use zkdid_core::crypto::KeyPair;
+/// use zkdid_core::did::Did;
 ///
 /// let keypair = KeyPair::generate();
 /// let did = Did::from_public_key(&keypair.public);

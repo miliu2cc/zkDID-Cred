@@ -2,7 +2,7 @@
 //!
 //! 运行方式：cargo run --example crypto_demo
 
-use core::crypto::KeyPair;
+use zkdid_core::crypto::KeyPair;
 
 fn main() {
     println!("=== zkDID-Cred 密码学模块演示 ===\n");

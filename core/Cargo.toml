@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "zkdid-core"
 edition.workspace = true
 license.workspace = true
 version.workspace = true

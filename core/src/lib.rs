@@ -17,5 +17,5 @@ pub mod error;
 pub mod vc;
 pub mod zkp;
 
-// 重新导出常用类型，方便外部直接 `use core::{CoreError, Result}`
+// 重新导出常用类型，方便外部直接 `use zkdid_core::{CoreError, Result}`
 pub use error::{CoreError, Result};

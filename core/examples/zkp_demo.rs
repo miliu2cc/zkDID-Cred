@@ -4,10 +4,10 @@
 //!   PATH="$HOME/.bb:$PATH" cargo run -p core --example zkp_demo
 
 use chrono::Utc;
-use core::crypto::KeyPair;
-use core::did::Did;
-use core::vc::{CredentialSubject, VerifiableCredential};
-use core::zkp::{self, Claims};
+use zkdid_core::crypto::KeyPair;
+use zkdid_core::did::Did;
+use zkdid_core::vc::{CredentialSubject, VerifiableCredential};
+use zkdid_core::zkp::{self, Claims};
 
 fn main() {
     if let Err(e) = run() {
@@ -16,7 +16,7 @@ fn main() {
     }
 }
 
-fn run() -> core::Result<()> {
+fn run() -> zkdid_core::Result<()> {
     if !zkp::backend_available() {
         eprintln!("nargo / bb 未安装，跳过证明生成演示。");
         eprintln!("安装方式：noirup（nargo）+ bbup（bb）");
@@ -64,7 +64,7 @@ fn run() -> core::Result<()> {
     let commitment = zkp::commitment_of_credential(&signed)?;
     println!("   ✓ 声明承诺: {}", commitment.to_hex());
 
-    core::vc::verify_credential(&signed)?;
+    zkdid_core::vc::verify_credential(&signed)?;
     println!("   ✓ 凭证签名有效\n");
 
     // 4. 学生侧：从凭证声明解析出电路声明
