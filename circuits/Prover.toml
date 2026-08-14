@@ -1,0 +1,11 @@
+# GPA 证明示例：证明 GPA(3.85) > 阈值(3.50)，不泄露具体分数
+# mode: 1=GPA, 2=课程, 3=学位
+mode = "1"
+commitment = "0x2dec1fe4ad53fed2ef43c460bb9e997619f07f8b8a62dd8156b45921aeeb8515"
+threshold = "350"
+target_course = "0"
+degree_code = "0"
+# —— 私有声明 ——
+gpa_scaled = "385"
+degree = "0"
+courses = ["0", "0", "0", "0", "0", "0", "0", "0"]
