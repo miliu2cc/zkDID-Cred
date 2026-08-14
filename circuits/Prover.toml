@@ -1,8 +1,8 @@
-mode = "3"
+mode = "1"
 commitment = "0x261ff7d095879e86ffd934aad26b153bb6a7c7a2f49d625476c75b0f8b7a6c0c"
-threshold = "0"
+threshold = "350"
 target_course = "0"
-degree_code = "1"
+degree_code = "0"
 gpa_scaled = "385"
 degree = "1"
 courses = ["101", "205", "0", "0", "0", "0", "0", "0"]

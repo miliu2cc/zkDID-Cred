@@ -58,6 +58,7 @@ fn run() -> core::Result<()> {
         expiration_date: None,
         credential_subject: CredentialSubject {
             id: holder_did.to_string(),
+            claims_commitment: None,
             claims: json!({
                 "name": "Alice Smith",
                 "degree": "Bachelor of Computer Science",

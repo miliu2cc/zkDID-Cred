@@ -1,10 +1,12 @@
-//! 零知识证明端到端演示
-//!
-//! 完整流程：Rust 计算承诺 → nargo 生成见证 → bb 生成/验证证明。
+//! 完整流程演示：签发带承诺的凭证 → 生成/验证 ZK 证明（绑定到凭证）
 //!
 //! 运行方式（确保 nargo / bb 在 PATH 中）：
 //!   PATH="$HOME/.bb:$PATH" cargo run -p core --example zkp_demo
 
+use chrono::Utc;
+use core::crypto::KeyPair;
+use core::did::Did;
+use core::vc::{CredentialSubject, VerifiableCredential};
 use core::zkp::{self, Claims};
 
 fn main() {
@@ -21,39 +23,65 @@ fn run() -> core::Result<()> {
         return Ok(());
     }
 
-    println!("=== zkDID-Cred: 零知识证明端到端演示 ===\n");
+    println!("=== zkDID-Cred: 完整流程演示 ===\n");
 
-    // 学生声明：GPA 3.85（385）、学士学位（1）、修过两门课
-    let claims = Claims::new(385, 1, [101, 205, 0, 0, 0, 0, 0, 0]);
+    // 1. 生成签发方（学校）与学生密钥对 + DID
+    let issuer_kp = KeyPair::generate();
+    let holder_kp = KeyPair::generate();
+    let issuer_did = Did::from_public_key(&issuer_kp.public).to_string();
+    let holder_did = Did::from_public_key(&holder_kp.public).to_string();
+    println!("1. 签发方 DID: {}", issuer_did);
+    println!("   学生 DID:   {}\n", holder_did);
 
-    // 1. 计算承诺（签发方会把该值写入凭证并签名）
-    let commitment = zkp::commitment(&claims);
-    println!("1. 声明承诺: {}", commitment.to_hex());
+    // 2. 构造凭证声明（ZK 兼容 schema：gpa / degree / courses）
+    let credential = VerifiableCredential {
+        context: vec!["https://www.w3.org/2018/credentials/v1".to_string()],
+        id: "urn:uuid:demo-credential".to_string(),
+        types: vec![
+            "VerifiableCredential".to_string(),
+            "UniversityDegreeCredential".to_string(),
+        ],
+        issuer: issuer_did.clone(),
+        issuance_date: Utc::now().to_rfc3339(),
+        expiration_date: None,
+        credential_subject: CredentialSubject {
+            id: holder_did.clone(),
+            claims_commitment: None,
+            claims: serde_json::json!({
+                "gpa": 3.85,
+                "degree": "bachelor",
+                "major": "Computer Science",
+                "courses": [101, 205]
+            }),
+        },
+        credential_status: None,
+        proof: None,
+    };
 
-    // 2. GPA 证明：证明 GPA > 3.5（350），不泄露具体分数
-    println!("\n2. 生成 GPA 证明（GPA > 3.5）...");
+    // 3. 签发：计算承诺并写入凭证，随后 Ed25519 签名
+    println!("2. 签发凭证（计算承诺 + Ed25519 签名）...");
+    let signed = zkp::issue_with_commitment(credential, &issuer_kp)?;
+    let commitment = zkp::commitment_of_credential(&signed)?;
+    println!("   ✓ 声明承诺: {}", commitment.to_hex());
+
+    core::vc::verify_credential(&signed)?;
+    println!("   ✓ 凭证签名有效\n");
+
+    // 4. 学生侧：从凭证声明解析出电路声明
+    let claims: Claims = zkp::claims_from_json(&signed.credential_subject.claims)?;
+
+    // 5. 生成 GPA 证明（GPA > 3.5，不泄露具体分数）
+    println!("3. 生成 GPA 证明（GPA > 3.5）...");
     let artifact = zkp::prove_gpa(&claims, 350)?;
-    println!(
-        "   ✓ 证明已生成（mode={}, threshold={}）",
-        artifact.mode, artifact.threshold
-    );
+    println!("   ✓ 证明已生成");
+
+    // 6. 验证证明（绑定到凭证的签名承诺）
+    println!("4. 验证证明（绑定到凭证承诺）...");
     zkp::verify(&artifact, Some(&commitment))?;
-    println!("   ✓ 验证通过，且承诺绑定一致");
+    println!("   ✓ 证明验证通过，且与凭证承诺一致");
 
-    // 3. 课程证明：证明修过课程 205，不泄露其他课程
-    println!("\n3. 生成课程证明（修过课程 205）...");
-    let course_artifact = zkp::prove_course(&claims, 205)?;
-    zkp::verify(&course_artifact, Some(&commitment))?;
-    println!("   ✓ 验证通过");
-
-    // 4. 学位证明：证明持有学士学位（1）
-    println!("\n4. 生成学位证明（持有学士学位）...");
-    let degree_artifact = zkp::prove_degree(&claims, 1)?;
-    zkp::verify(&degree_artifact, Some(&commitment))?;
-    println!("   ✓ 验证通过");
-
-    // 5. 防伪造演示：错误的承诺应被拒绝
-    println!("\n5. 演示防伪造（错误的承诺应被拒绝）...");
+    // 7. 防伪造：错误的承诺应被拒绝
+    println!("\n5. 演示防伪造（错误承诺应被拒绝）...");
     let wrong = zkp::Fr::from_u64(0xdeadbeef);
     match zkp::verify(&artifact, Some(&wrong)) {
         Ok(_) => println!("   ✗ 不应通过（bug）"),

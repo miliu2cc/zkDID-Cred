@@ -64,6 +64,11 @@ pub struct CredentialSubject {
     /// 凭证主体（学生）的 DID
     pub id: String,
 
+    /// 声明的 Poseidon2 承诺（0x 前缀十六进制）。由签发方计算并随凭证签名，
+    /// 用于把零知识证明绑定到具体的凭证声明上（见 `zkp` 模块）。
+    #[serde(rename = "claimsCommitment", skip_serializing_if = "Option::is_none")]
+    pub claims_commitment: Option<String>,
+
     /// 任意声明（如 gpa、degree、courses）。以 JSON 对象存储，
     /// 使不同类型的凭证可以携带不同字段
     #[serde(flatten)]

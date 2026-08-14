@@ -15,8 +15,11 @@ pub mod poseidon2;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::crypto::KeyPair;
 use crate::error::{CoreError, Result};
+use crate::vc;
 pub use poseidon2::Fr;
+use serde_json::Value;
 
 /// 最多课程数（与 circuits/src/claims.nr 一致）
 pub const MAX_COURSES: usize = 8;
@@ -77,6 +80,87 @@ pub fn commitment(claims: &Claims) -> Fr {
 /// 计算承诺并返回 0x 前缀的十六进制字符串
 pub fn commitment_hex(claims: &Claims) -> String {
     commitment(claims).to_hex()
+}
+
+/// 从 JSON 声明解析为电路声明（与电路布局一致的编码）
+///
+/// 支持的 JSON 字段（全部可选，缺省为 0）：
+/// - `gpa`: 浮点 GPA（如 3.85 → gpa_scaled 385）
+/// - `degree`: 学位等级字符串 bachelor / master / doctor / none
+/// - `courses`: 课程编号数组（最多 MAX_COURSES 个）
+pub fn claims_from_json(value: &Value) -> Result<Claims> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| CoreError::ZkpError("claims must be a JSON object".to_string()))?;
+
+    let mut claims = Claims::new(0, 0, [0; MAX_COURSES]);
+
+    if let Some(gpa) = obj.get("gpa") {
+        let gpa = gpa
+            .as_f64()
+            .ok_or_else(|| CoreError::ZkpError("gpa must be a number".to_string()))?;
+        claims.gpa_scaled = (gpa * 100.0).round() as u64;
+    }
+
+    if let Some(degree) = obj.get("degree") {
+        let degree = degree
+            .as_str()
+            .ok_or_else(|| CoreError::ZkpError("degree must be a string".to_string()))?;
+        claims.degree = match degree {
+            "bachelor" => 1,
+            "master" => 2,
+            "doctor" => 3,
+            "none" | "" => 0,
+            other => {
+                return Err(CoreError::ZkpError(format!(
+                    "unknown degree level: {other} (expected bachelor/master/doctor/none)"
+                )));
+            }
+        };
+    }
+
+    if let Some(courses) = obj.get("courses") {
+        let arr = courses.as_array().ok_or_else(|| {
+            CoreError::ZkpError("courses must be an array of numbers".to_string())
+        })?;
+        if arr.len() > MAX_COURSES {
+            return Err(CoreError::ZkpError(format!(
+                "too many courses (max {MAX_COURSES})"
+            )));
+        }
+        for (i, c) in arr.iter().enumerate() {
+            claims.courses[i] = c
+                .as_u64()
+                .ok_or_else(|| CoreError::ZkpError("course id must be a number".to_string()))?;
+        }
+    }
+
+    Ok(claims)
+}
+
+/// 从 JSON 声明直接计算 Poseidon2 承诺
+pub fn commitment_from_json(value: &Value) -> Result<Fr> {
+    Ok(commitment(&claims_from_json(value)?))
+}
+
+/// 从凭证中读取声明承诺（用于把证明绑定到已签发凭证）
+pub fn commitment_of_credential(credential: &vc::VerifiableCredential) -> Result<Fr> {
+    let hex = credential
+        .credential_subject
+        .claims_commitment
+        .as_ref()
+        .ok_or_else(|| CoreError::ZkpError("credential has no claimsCommitment".to_string()))?;
+    Ok(Fr::from_hex(hex))
+}
+
+/// 计算声明承诺并写入凭证后签发，从而把零知识证明绑定到该凭证
+pub fn issue_with_commitment(
+    mut credential: vc::VerifiableCredential,
+    issuer_keypair: &KeyPair,
+) -> Result<vc::VerifiableCredential> {
+    let commitment = commitment_from_json(&credential.credential_subject.claims)?;
+    credential.credential_subject.claims_commitment = Some(commitment.to_hex());
+    vc::issue_credential(credential, issuer_keypair)
 }
 
 /// 证明产物（包含证明与公输入的路径，以及承诺值）
@@ -313,5 +397,47 @@ mod tests {
         let a = Claims::new(385, 0, [0; MAX_COURSES]);
         let b = Claims::new(300, 0, [0; MAX_COURSES]);
         assert_ne!(commitment(&a), commitment(&b));
+    }
+
+    #[test]
+    fn test_claims_from_json() {
+        let v: Value = serde_json::json!({
+            "gpa": 3.85,
+            "degree": "bachelor",
+            "courses": [101, 205]
+        });
+        let claims = claims_from_json(&v).unwrap();
+        assert_eq!(claims.gpa_scaled, 385);
+        assert_eq!(claims.degree, 1);
+        assert_eq!(claims.courses[0], 101);
+        assert_eq!(claims.courses[1], 205);
+        assert_eq!(claims.courses[2], 0);
+    }
+
+    #[test]
+    fn test_claims_from_json_defaults() {
+        let v: Value = serde_json::json!({});
+        let claims = claims_from_json(&v).unwrap();
+        assert_eq!(claims.gpa_scaled, 0);
+        assert_eq!(claims.degree, 0);
+        assert_eq!(claims.courses, [0; MAX_COURSES]);
+    }
+
+    #[test]
+    fn test_credential_subject_serde_roundtrip_with_commitment() {
+        // 验证 flatten + 具名字段的组合序列化/反序列化正确
+        let subject = vc::CredentialSubject {
+            id: "did:key:z6MkTest".to_string(),
+            claims_commitment: Some("0xabc".to_string()),
+            claims: serde_json::json!({"gpa": 3.85, "degree": "bachelor"}),
+        };
+        let json = serde_json::to_string(&subject).unwrap();
+        assert!(json.contains("claimsCommitment"));
+        assert!(json.contains("0xabc"));
+
+        let restored: vc::CredentialSubject = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.claims_commitment.as_deref(), Some("0xabc"));
+        assert_eq!(restored.id, subject.id);
+        assert_eq!(restored.claims, subject.claims);
     }
 }

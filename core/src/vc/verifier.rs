@@ -80,6 +80,7 @@ mod tests {
             expiration_date: None,
             credential_subject: CredentialSubject {
                 id: holder_did,
+                claims_commitment: None,
                 claims: json!({ "gpa": 3.9 }),
             },
             credential_status: None,
@@ -131,6 +132,7 @@ mod tests {
             expiration_date: Some("2021-01-01T00:00:00Z".to_string()),
             credential_subject: CredentialSubject {
                 id: holder_did,
+                claims_commitment: None,
                 claims: json!({ "gpa": 3.5 }),
             },
             credential_status: None,

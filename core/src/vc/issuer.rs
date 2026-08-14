@@ -74,6 +74,7 @@ mod tests {
             expiration_date: None,
             credential_subject: CredentialSubject {
                 id: holder_did.to_string(),
+                claims_commitment: None,
                 claims: json!({ "gpa": 3.8, "degree": "Computer Science" }),
             },
             credential_status: None,

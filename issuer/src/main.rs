@@ -33,7 +33,9 @@ enum Commands {
         /// Credential type (e.g., "UniversityDegreeCredential")
         #[arg(long)]
         credential_type: String,
-        /// Claims as JSON string (e.g., '{"degree":"Computer Science","gpa":3.8}')
+        /// Claims as JSON string, ZK-compatible schema:
+        /// '{"gpa":3.85,"degree":"bachelor","courses":[101,205]}'
+        /// degree: bachelor/master/doctor/none; courses: course IDs (max 8)
         #[arg(long)]
         claims: String,
         /// Expiration date (RFC3339 format, optional)
@@ -139,15 +141,17 @@ fn cmd_issue(
         expiration_date: expiration,
         credential_subject: CredentialSubject {
             id: holder.clone(),
+            claims_commitment: None,
             claims: claims_value,
         },
         credential_status: None,
         proof: None,
     };
 
-    // Sign credential
+    // 计算声明承诺并签发（把 ZK 证明绑定到凭证声明）
     println!("✍️  Signing credential...");
-    let signed_credential = core::vc::issue_credential(credential, &keypair)?;
+    let signed_credential = core::zkp::issue_with_commitment(credential, &keypair)?;
+    let commitment = core::zkp::commitment_of_credential(&signed_credential)?;
 
     // Save to file
     fs::write(&output, serde_json::to_string_pretty(&signed_credential)?)?;
@@ -156,6 +160,7 @@ fn cmd_issue(
     println!("📋 Credential ID: {}", credential_id);
     println!("👤 Holder: {}", holder);
     println!("📄 Type: {}", credential_type);
+    println!("🔐 Claims Commitment: {}", commitment.to_hex());
     println!("💾 Saved to: {}", output.display());
     println!("\n📤 Send this file to the holder to use 'holder-cli receive'");
 
