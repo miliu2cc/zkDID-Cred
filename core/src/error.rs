@@ -42,6 +42,10 @@ pub enum CoreError {
     /// 反序列化错误
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+
+    /// 零知识证明操作错误（nargo / bb 调用失败等）
+    #[error("ZK error: {0}")]
+    ZkpError(String),
 }
 
 /// 核心库统一使用的 Result 别名，错误类型固定为 [`CoreError`]

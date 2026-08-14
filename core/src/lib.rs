@@ -8,12 +8,14 @@
 //! - `crypto`：密码学原语（Ed25519 密钥对、签名、验证）
 //! - `did`：DID 的生成、解析与解析器
 //! - `vc`：可验证凭证的数据结构、签发与验证
+//! - `zkp`：零知识证明集成（Poseidon2 承诺 + 证明生成/验证）
 //! - `error`：错误类型与 Result 别名
 
 pub mod crypto;
 pub mod did;
 pub mod error;
 pub mod vc;
+pub mod zkp;
 
 // 重新导出常用类型，方便外部直接 `use core::{CoreError, Result}`
 pub use error::{CoreError, Result};
