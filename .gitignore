@@ -17,6 +17,8 @@ circuits/*.json
 !circuits/Nargo.toml
 
 # Foundry
+out/
+cache/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
